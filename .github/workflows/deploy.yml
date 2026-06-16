@@ -2,7 +2,7 @@ name: Deploy BeachTracker to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/vashon-wildlife-detection-hnqutc]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
