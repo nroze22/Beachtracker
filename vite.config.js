@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 // Project is served from https://<user>.github.io/beachtracker/ on GitHub Pages,
 // so the base path must match the repo name. Override with BASE_PATH for other hosts
 // (e.g. BASE_PATH=/ when serving from a custom domain or a tunnel root).
-const base = process.env.BASE_PATH ?? '/beachtracker/';
+const base = process.env.BASE_PATH ?? '/Beachtracker/';
 
 export default defineConfig({
   base,

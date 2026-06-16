@@ -30,7 +30,7 @@ Open it in Safari, tap *Add to Home Screen*, and it runs like a native app.
 
 1. **Enable GitHub Pages** for this repo: *Settings → Pages → Build and deployment → Source: **GitHub Actions***.
 2. Push to the branch — the included workflow builds and deploys automatically.
-3. On your iPhone, open **`https://nroze22.github.io/beachtracker/`** in Safari.
+3. On your iPhone, open **`https://nroze22.github.io/Beachtracker/`** in Safari.
 4. Tap **Share → Add to Home Screen**. Launch it from the icon.
 5. Tap **▶ Start**, allow **Camera** (and **Motion & Location** if you want ship/plane ID).
 
