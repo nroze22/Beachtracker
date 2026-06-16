@@ -14,8 +14,10 @@ const DEFAULT_SETTINGS = {
   fovDeg: 65, // typical rear-camera horizontal FOV on an iPhone
   customModelUrl: '',
   scene: 'all', // detection scene filter: all | water | sky | beach
-  farScan: true, // alternate a 2x centre-crop pass to catch distant objects
-  radar: true // show the AIS/ADS-B radar minimap
+  farScan: false, // extra 2x centre-crop pass (heavier); YOLO's 640px input usually suffices
+  radar: true, // show the AIS/ADS-B radar minimap
+  engine: 'yolo', // detector: 'yolo' (accurate) | 'coco' (light fallback)
+  yoloUrl: import.meta.env.BASE_URL + 'models/yolov8n_web_model/model.json'
 };
 
 function load(key, fallback) {

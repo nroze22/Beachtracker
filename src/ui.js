@@ -240,6 +240,7 @@ export function closeDrawer(id) {
 export function initSettingsUI(onChange) {
   const conf = $('confSlider');
   const confVal = $('confVal');
+  const engineT = $('engineToggle');
   const acc = $('accToggle');
   const farScan = $('farScanToggle');
   const radar = $('radarToggle');
@@ -253,6 +254,7 @@ export function initSettingsUI(onChange) {
 
   conf.value = settings.confidence;
   confVal.textContent = settings.confidence.toFixed(2);
+  engineT.checked = settings.engine === 'yolo';
   acc.checked = settings.highAccuracy;
   farScan.checked = settings.farScan;
   radar.checked = settings.radar;
@@ -273,6 +275,10 @@ export function initSettingsUI(onChange) {
     settings.confidence = parseFloat(conf.value);
     confVal.textContent = settings.confidence.toFixed(2);
     commit('confidence');
+  });
+  engineT.addEventListener('change', () => {
+    settings.engine = engineT.checked ? 'yolo' : 'coco';
+    commit('engine');
   });
   acc.addEventListener('change', () => {
     settings.highAccuracy = acc.checked;

@@ -78,6 +78,11 @@
         <button class="btn ghost" data-close="settingsDrawer">✕</button>
       </div>
       <div class="settings-body">
+        <label class="toggle">
+          <input id="engineToggle" type="checkbox" />
+          <span>Use <b>YOLOv8</b> detector <small>(much better at distant/large ships; ~13&nbsp;MB, cached after first load)</small></span>
+        </label>
+
         <label class="field">
           <span>Detection confidence <small>(lower = spots more distant/faint objects)</small></span>
           <input id="confSlider" type="range" min="0.1" max="0.8" step="0.05" />

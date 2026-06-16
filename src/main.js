@@ -401,11 +401,21 @@ async function start() {
     setStatus('Requesting camera…');
     await startCamera();
 
-    setStatus('Loading detector (first time needs internet)…');
-    await loadDetector({
+    setStatus(
+      settings.engine === 'yolo'
+        ? 'Loading YOLOv8 model (first run caches ~13 MB)…'
+        : 'Loading detector…'
+    );
+    const res = await loadDetector({
+      engine: settings.engine,
+      yoloUrl: settings.yoloUrl,
       customModelUrl: settings.customModelUrl || undefined,
       highAccuracy: settings.highAccuracy
     });
+    if (res.fellBack) {
+      setStatus('⚠️ YOLOv8 unavailable — using COCO-SSD', 'error');
+      setTimeout(() => running && setStatus(''), 2500);
+    }
 
     // Best-effort sensors for the identification fusion.
     if (settings.fusion || settings.ais || settings.adsb) {
@@ -438,13 +448,18 @@ function pause() {
 // Swap the detection model live when the accuracy / custom-model setting changes.
 async function reloadDetector() {
   try {
-    setStatus('Switching detection model…');
-    await loadDetector({
+    setStatus(
+      settings.engine === 'yolo' ? 'Loading YOLOv8 model…' : 'Switching detection model…'
+    );
+    const res = await loadDetector({
+      engine: settings.engine,
+      yoloUrl: settings.yoloUrl,
       customModelUrl: settings.customModelUrl || undefined,
       highAccuracy: settings.highAccuracy
     });
     tracker.reset();
-    setStatus('');
+    setStatus(res.fellBack ? '⚠️ YOLOv8 unavailable — using COCO-SSD' : '', res.fellBack ? 'error' : '');
+    if (res.fellBack) setTimeout(() => running && setStatus(''), 2500);
   } catch (e) {
     setStatus(`⚠️ ${e.message || e}`, 'error');
   }
@@ -571,7 +586,7 @@ function init() {
       lastDataSync = 0; // force a feed re-sync on next loop tick
       if (!running) syncFeeds();
     }
-    if (['highAccuracy', 'customModel'].includes(changed) && running) {
+    if (['engine', 'highAccuracy', 'customModel'].includes(changed) && running) {
       reloadDetector();
     }
   });

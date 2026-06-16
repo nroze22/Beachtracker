@@ -15,7 +15,7 @@ Open it in Safari, tap *Add to Home Screen*, and it runs like a native app.
 
 | Feature | How |
 | --- | --- |
-| 🐦 / 🚢 / ✈️ **Detection** | TensorFlow.js **COCO-SSD** runs on the phone GPU (WebGL). Works fully offline. Detects seagulls (`bird`), ships (`boat`), planes (`airplane`), plus beach regulars: kites 🪁, surfboards 🏄, beach umbrellas ⛱️, people & dogs. |
+| 🐦 / 🚢 / ✈️ **Detection** | **YOLOv8n** (default) running in-browser on TensorFlow.js / WebGL — far better at distant & large vessels than the old model. Auto-falls back to **COCO-SSD** if the model can't load. Both work fully offline once cached. Detects seagulls (`bird`), ships (`boat`), planes (`airplane`), plus kites 🪁, surfboards 🏄, beach umbrellas ⛱️, people & dogs. |
 | 🎣 **Vessel types** | A generic `boat` is promoted to its real type — **fishing boat, sailboat, ferry, cargo ship, tanker, tug, military** — using the AIS ship-type code, with its own emoji, colour and counter. |
 | 🔢 **Counting** | A **SORT-style IoU tracker** gives every object a stable ID across frames, so you get honest *unique* counts (live on-screen **and** cumulative) instead of double-counting the same gull every frame. |
 | 🛰 **Ship identity** | Live **AIS** via [aisstream.io](https://aisstream.io) — name, type, destination, speed. |
@@ -115,5 +115,14 @@ camera ─▶ detector.js (COCO-SSD) ─▶ tracker.js (IoU/SORT, counting)
 Everything runs in your browser. Your AIS key and settings live in
 `localStorage`. The only outbound calls are to aisstream.io (ships) and
 adsb.lol (planes), and only when you enable those toggles.
+
+## Credits
+
+- **YOLOv8** by [Ultralytics](https://github.com/ultralytics/ultralytics) (AGPL-3.0).
+  The bundled TF.js `yolov8n_web_model` (in `public/models/`) is the conversion
+  from [Hyuto/yolov8-tfjs](https://github.com/Hyuto/yolov8-tfjs). Swap it for your
+  own model via **Settings → Custom detection model URL** or the `yoloUrl` setting.
+- **COCO-SSD** via TensorFlow.js (fallback detector).
+- AIS by [aisstream.io](https://aisstream.io); ADS-B by [adsb.lol](https://api.adsb.lol).
 
 Made for spotting the Salish Sea. 🌊
