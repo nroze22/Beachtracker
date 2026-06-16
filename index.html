@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0b1f33" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BeachTracker" />
+    <title>BeachTracker · live shore spotter</title>
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Camera + detection overlay -->
+      <div id="stage">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="overlay"></canvas>
+
+        <!-- Live per-class counters -->
+        <div id="counters" class="panel"></div>
+
+        <!-- Status / messages -->
+        <div id="status" class="status">Tap <b>Start</b> to begin spotting.</div>
+
+        <!-- Identification cards (ships / planes matched to live data) -->
+        <div id="idcards"></div>
+      </div>
+
+      <!-- Bottom control bar -->
+      <div id="controls">
+        <button id="startBtn" class="btn primary">▶ Start</button>
+        <button id="flipBtn" class="btn" title="Flip camera">⟳</button>
+        <button id="sealBtn" class="btn tag" title="Log a seal sighting">🦭 Seal</button>
+        <button id="otterBtn" class="btn tag" title="Log an otter sighting">🦦 Otter</button>
+        <button id="logBtn" class="btn" title="Sighting log">📋</button>
+        <button id="settingsBtn" class="btn" title="Settings">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Sighting log drawer -->
+    <div id="logDrawer" class="drawer">
+      <div class="drawer-head">
+        <h2>Sighting log</h2>
+        <button class="btn ghost" data-close="logDrawer">✕</button>
+      </div>
+      <div id="logStats" class="logstats"></div>
+      <div id="logList" class="loglist"></div>
+      <div class="drawer-foot">
+        <button id="exportBtn" class="btn">⬇ Export CSV</button>
+        <button id="clearLogBtn" class="btn danger">Clear log</button>
+      </div>
+    </div>
+
+    <!-- Settings drawer -->
+    <div id="settingsDrawer" class="drawer">
+      <div class="drawer-head">
+        <h2>Settings</h2>
+        <button class="btn ghost" data-close="settingsDrawer">✕</button>
+      </div>
+      <div class="settings-body">
+        <label class="field">
+          <span>Detection confidence</span>
+          <input id="confSlider" type="range" min="0.2" max="0.8" step="0.05" />
+          <em id="confVal"></em>
+        </label>
+
+        <label class="toggle">
+          <input id="aisToggle" type="checkbox" />
+          <span>Identify <b>ships</b> via AIS (needs internet)</span>
+        </label>
+        <label class="field sub">
+          <span>AISStream API key <a href="https://aisstream.io/" target="_blank" rel="noopener">(free key →)</a></span>
+          <input id="aisKey" type="text" placeholder="paste your aisstream.io key" autocomplete="off" />
+        </label>
+
+        <label class="toggle">
+          <input id="adsbToggle" type="checkbox" />
+          <span>Identify <b>planes</b> via ADS-B (needs internet)</span>
+        </label>
+
+        <label class="toggle">
+          <input id="fusionToggle" type="checkbox" />
+          <span>Use GPS + compass to match what I'm pointing at</span>
+        </label>
+
+        <label class="field">
+          <span>Camera field of view (°)</span>
+          <input id="fovSlider" type="range" min="40" max="90" step="1" />
+          <em id="fovVal"></em>
+        </label>
+
+        <label class="field">
+          <span>Custom detection model URL <small>(TF.js model.json — optional, for a seal/otter model)</small></span>
+          <input id="customModel" type="text" placeholder="https://.../model.json" autocomplete="off" />
+        </label>
+
+        <p class="note">
+          Everything runs on your phone. Detection works fully offline once loaded;
+          AIS/ADS-B identification only runs when you have internet. Your AIS key and
+          settings stay in this browser (localStorage) and are never sent anywhere
+          except aisstream.io.
+        </p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

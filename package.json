@@ -1,0 +1,21 @@
+{
+  "name": "beachtracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live computer-vision wildlife & vessel tracker for the beach — detects gulls, ships, planes; counts them; and identifies ships (AIS) and aircraft (ADS-B) in real time. Runs as a PWA on iPhone.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10",
+    "vite-plugin-pwa": "^0.21.1"
+  }
+}
