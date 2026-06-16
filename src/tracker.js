@@ -132,6 +132,11 @@ export class Tracker {
     this.tracks.clear();
     this.totals = {};
   }
+
+  /** Remove a single track (e.g. user tapped a false-positive box to dismiss it). */
+  remove(id) {
+    this.tracks.delete(id);
+  }
 }
 
 export class Track {

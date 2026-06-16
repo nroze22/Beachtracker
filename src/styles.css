@@ -38,6 +38,8 @@ body {
   flex: 1;
   overflow: hidden;
   background: #000;
+  /* Take over pinch/zoom gestures so the page doesn't zoom instead. */
+  touch-action: none;
 }
 #video,
 #overlay {

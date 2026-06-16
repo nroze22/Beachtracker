@@ -40,13 +40,14 @@ let lastDataSync = 0;
 const vesselTotals = {};
 
 // --- Zoom ---------------------------------------------------------------
-// nativeZoom: the camera track's optical/native zoom capability, if any.
-// When absent we fall back to digital zoom (CSS scale + cropped detection).
+// Digital zoom: scale the displayed video + overlay with CSS, and crop+upscale
+// the centre of the frame before detection so distant objects fill more of the
+// model input. (Native/optical zoom via applyConstraints is unreliable in iOS
+// Safari, so we use digital zoom everywhere for a consistent, working result.)
 let videoTrack = null;
-let nativeZoom = null; // {min, max, step}
 let zoom = 1;
-// Offscreen canvas used to crop+upscale the centre of the frame so a distant
-// ship fills more of the detector's input when digitally zoomed.
+const MAX_ZOOM = 8;
+// Offscreen canvas used to crop+upscale the centre of the frame.
 const detCanvas = document.createElement('canvas');
 const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
 let detCrop = null; // {cx, cy, scale} mapping det-space boxes back to video space
@@ -79,62 +80,36 @@ function stopCamera() {
   videoTrack = null;
 }
 
-// Detect native zoom support and configure the zoom slider accordingly.
 function setupZoom(stream) {
   videoTrack = stream.getVideoTracks()[0] || null;
-  nativeZoom = null;
-  const caps = videoTrack?.getCapabilities?.();
-  if (caps && 'zoom' in caps && caps.zoom && caps.zoom.max > caps.zoom.min) {
-    nativeZoom = {
-      min: caps.zoom.min,
-      max: caps.zoom.max,
-      step: caps.zoom.step || 0.1
-    };
-  }
   const slider = document.getElementById('zoomSlider');
-  if (nativeZoom) {
-    slider.min = nativeZoom.min;
-    slider.max = nativeZoom.max;
-    slider.step = nativeZoom.step;
-  } else {
-    slider.min = 1;
-    slider.max = 6; // digital zoom range
-    slider.step = 0.1;
-  }
-  zoom = nativeZoom ? nativeZoom.min : 1;
-  slider.value = zoom;
-  applyZoom(zoom);
+  slider.min = 1;
+  slider.max = MAX_ZOOM;
+  slider.step = 0.1;
+  zoom = 1;
+  slider.value = 1;
+  applyZoom(1);
   document.getElementById('zoomControl').hidden = false;
 }
 
 function applyZoom(z) {
-  const minZ = nativeZoom ? nativeZoom.min : 1;
-  const maxZ = nativeZoom ? nativeZoom.max : 6;
-  zoom = Math.max(minZ, Math.min(maxZ, z));
+  zoom = Math.max(1, Math.min(MAX_ZOOM, z));
   const slider = document.getElementById('zoomSlider');
   slider.value = zoom;
   document.getElementById('zoomLabel').textContent = `${zoom.toFixed(1)}×`;
-
-  if (nativeZoom && videoTrack) {
-    // Optical/native zoom: the camera itself zooms; no CSS transform needed.
-    video.style.transform = '';
-    canvas.style.transform = '';
-    videoTrack.applyConstraints({ advanced: [{ zoom }] }).catch(() => {});
-  } else {
-    // Digital zoom: scale the displayed video + overlay together about centre.
-    const t = zoom > 1.001 ? `scale(${zoom})` : '';
-    video.style.transformOrigin = 'center center';
-    canvas.style.transformOrigin = 'center center';
-    video.style.transform = t;
-    canvas.style.transform = t;
-  }
+  // Scale the displayed video + overlay together about centre.
+  const t = zoom > 1.001 ? `scale(${zoom})` : '';
+  video.style.transformOrigin = 'center center';
+  canvas.style.transformOrigin = 'center center';
+  video.style.transform = t;
+  canvas.style.transform = t;
 }
 
 // Build the image we actually run detection on. For digital zoom we crop the
 // centre of the frame and upscale it, so distant objects get bigger pixels and
 // the detector can resolve them. Returns the source element/canvas to detect.
 function detectionSource() {
-  if (nativeZoom || zoom <= 1.001) {
+  if (zoom <= 1.001) {
     detCrop = null;
     return video;
   }
@@ -160,6 +135,43 @@ function mapBox(b) {
   if (!detCrop) return b;
   const { cx, cy, scale } = detCrop;
   return [cx + b[0] / scale, cy + b[1] / scale, b[2] / scale, b[3] / scale];
+}
+
+// Convert a screen point to video-intrinsic coordinates, inverting the
+// object-fit:cover layout and the CSS zoom transform (both centred).
+function screenToVideo(clientX, clientY) {
+  const rect = document.getElementById('stage').getBoundingClientRect();
+  const W = video.videoWidth || rect.width;
+  const H = video.videoHeight || rect.height;
+  const cover = Math.max(rect.width / W, rect.height / H);
+  const cxE = rect.left + rect.width / 2;
+  const cyE = rect.top + rect.height / 2;
+  return {
+    x: W / 2 + (clientX - cxE) / (cover * zoom),
+    y: H / 2 + (clientY - cyE) / (cover * zoom)
+  };
+}
+
+// Find the smallest confirmed track whose box contains a video-space point.
+let lastActive = [];
+function dismissAt(clientX, clientY) {
+  const p = screenToVideo(clientX, clientY);
+  let hit = null;
+  let hitArea = Infinity;
+  for (const t of lastActive) {
+    const [x, y, w, h] = t.bbox;
+    if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h && w * h < hitArea) {
+      hit = t;
+      hitArea = w * h;
+    }
+  }
+  if (hit) {
+    tracker.remove(hit.id);
+    setStatus('✕ Removed', 'flash');
+    setTimeout(() => running && setStatus(''), 800);
+    return true;
+  }
+  return false;
 }
 
 // ----------------------------------------------------------- data feeds
@@ -198,6 +210,7 @@ async function loop() {
     const detections = raw.map((d) => ({ ...d, bbox: mapBox(d.bbox) }));
 
     const active = tracker.update(detections);
+    lastActive = active; // for tap-to-dismiss hit testing
 
     // Fuse with live transponder data when enabled and oriented.
     let idents = new Map();
@@ -316,7 +329,8 @@ async function start() {
     running = true;
     btn.textContent = '⏸ Pause';
     btn.disabled = false;
-    setStatus('');
+    setStatus('Pinch to zoom · tap a wrong box to remove it', 'flash');
+    setTimeout(() => running && setStatus(''), 3500);
     requestAnimationFrame(loop);
   } catch (e) {
     console.error(e);
@@ -349,11 +363,9 @@ async function reloadDetector() {
   }
 }
 
-// --- Zoom input wiring --------------------------------------------------
+// --- Zoom + tap input wiring --------------------------------------------
 function zoomStep() {
-  return nativeZoom
-    ? Math.max(nativeZoom.step, (nativeZoom.max - nativeZoom.min) / 12)
-    : 0.5;
+  return 0.5;
 }
 
 function touchDist(touches) {
@@ -362,16 +374,45 @@ function touchDist(touches) {
   return Math.hypot(dx, dy);
 }
 
-function setupPinch() {
+function setupGestures() {
   const stage = document.getElementById('stage');
   let startDist = 0;
   let startZoom = 1;
+  let pinching = false;
+  let tap = null; // {x, y, t} candidate single-finger tap
+
+  // iOS Safari pinch: gesture* events carry a cumulative `scale`.
+  stage.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+    startZoom = zoom;
+    pinching = true;
+  });
+  stage.addEventListener('gesturechange', (e) => {
+    e.preventDefault();
+    applyZoom(startZoom * e.scale);
+  });
+  stage.addEventListener('gestureend', (e) => {
+    e.preventDefault();
+    pinching = false;
+  });
+
+  // Touch pinch (Android / non-Safari) + single-tap to dismiss a box.
   stage.addEventListener(
     'touchstart',
     (e) => {
       if (e.touches.length === 2) {
         startDist = touchDist(e.touches);
         startZoom = zoom;
+        pinching = true;
+        tap = null;
+      } else if (e.touches.length === 1) {
+        // Ignore taps that start on overlay UI (zoom control, chips, cards).
+        if (e.target.closest('.zoomctl, #counters, #idcards, button')) {
+          tap = null;
+          return;
+        }
+        const t = e.touches[0];
+        tap = { x: t.clientX, y: t.clientY, t: Date.now() };
       }
     },
     { passive: true }
@@ -382,6 +423,9 @@ function setupPinch() {
       if (e.touches.length === 2 && startDist) {
         e.preventDefault();
         applyZoom(startZoom * (touchDist(e.touches) / startDist));
+      } else if (tap && e.touches.length === 1) {
+        const t = e.touches[0];
+        if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > 14) tap = null;
       }
     },
     { passive: false }
@@ -390,6 +434,12 @@ function setupPinch() {
     'touchend',
     (e) => {
       if (e.touches.length < 2) startDist = 0;
+      // A quick, stationary single-finger tap dismisses the box under it.
+      if (tap && !pinching && Date.now() - tap.t < 400) {
+        dismissAt(tap.x, tap.y);
+      }
+      if (e.touches.length === 0) pinching = false;
+      tap = null;
     },
     { passive: true }
   );
@@ -451,7 +501,7 @@ function init() {
   document
     .getElementById('zoomOut')
     .addEventListener('click', () => applyZoom(zoom - zoomStep()));
-  setupPinch();
+  setupGestures();
   renderCounters({}, {});
   renderLog();
 
