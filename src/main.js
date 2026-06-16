@@ -26,7 +26,9 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 
-const tracker = new Tracker({ iouThreshold: 0.25, maxAge: 14, minHits: 3 });
+// Sticky tracker: confirms fast (minHits) and coasts a long time (maxAge) so a
+// highlight stays on the target the whole time it's in view.
+const tracker = new Tracker({ iouThreshold: 0.2, maxAge: 45, minHits: 2 });
 const ais = new AisClient();
 const adsb = new AdsbClient();
 
@@ -36,6 +38,18 @@ let lastIdents = new Map();
 let lastDataSync = 0;
 // Cumulative unique counts of AIS-identified vessel subtypes (fishing, ferry…).
 const vesselTotals = {};
+
+// --- Zoom ---------------------------------------------------------------
+// nativeZoom: the camera track's optical/native zoom capability, if any.
+// When absent we fall back to digital zoom (CSS scale + cropped detection).
+let videoTrack = null;
+let nativeZoom = null; // {min, max, step}
+let zoom = 1;
+// Offscreen canvas used to crop+upscale the centre of the frame so a distant
+// ship fills more of the detector's input when digitally zoomed.
+const detCanvas = document.createElement('canvas');
+const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
+let detCrop = null; // {cx, cy, scale} mapping det-space boxes back to video space
 
 // ------------------------------------------------------------------ camera
 
@@ -55,12 +69,97 @@ async function startCamera() {
     if (video.readyState >= 2) return res();
     video.onloadeddata = () => res();
   });
+  setupZoom(stream);
 }
 
 function stopCamera() {
   const s = video.srcObject;
   if (s) s.getTracks().forEach((t) => t.stop());
   video.srcObject = null;
+  videoTrack = null;
+}
+
+// Detect native zoom support and configure the zoom slider accordingly.
+function setupZoom(stream) {
+  videoTrack = stream.getVideoTracks()[0] || null;
+  nativeZoom = null;
+  const caps = videoTrack?.getCapabilities?.();
+  if (caps && 'zoom' in caps && caps.zoom && caps.zoom.max > caps.zoom.min) {
+    nativeZoom = {
+      min: caps.zoom.min,
+      max: caps.zoom.max,
+      step: caps.zoom.step || 0.1
+    };
+  }
+  const slider = document.getElementById('zoomSlider');
+  if (nativeZoom) {
+    slider.min = nativeZoom.min;
+    slider.max = nativeZoom.max;
+    slider.step = nativeZoom.step;
+  } else {
+    slider.min = 1;
+    slider.max = 6; // digital zoom range
+    slider.step = 0.1;
+  }
+  zoom = nativeZoom ? nativeZoom.min : 1;
+  slider.value = zoom;
+  applyZoom(zoom);
+  document.getElementById('zoomControl').hidden = false;
+}
+
+function applyZoom(z) {
+  const minZ = nativeZoom ? nativeZoom.min : 1;
+  const maxZ = nativeZoom ? nativeZoom.max : 6;
+  zoom = Math.max(minZ, Math.min(maxZ, z));
+  const slider = document.getElementById('zoomSlider');
+  slider.value = zoom;
+  document.getElementById('zoomLabel').textContent = `${zoom.toFixed(1)}×`;
+
+  if (nativeZoom && videoTrack) {
+    // Optical/native zoom: the camera itself zooms; no CSS transform needed.
+    video.style.transform = '';
+    canvas.style.transform = '';
+    videoTrack.applyConstraints({ advanced: [{ zoom }] }).catch(() => {});
+  } else {
+    // Digital zoom: scale the displayed video + overlay together about centre.
+    const t = zoom > 1.001 ? `scale(${zoom})` : '';
+    video.style.transformOrigin = 'center center';
+    canvas.style.transformOrigin = 'center center';
+    video.style.transform = t;
+    canvas.style.transform = t;
+  }
+}
+
+// Build the image we actually run detection on. For digital zoom we crop the
+// centre of the frame and upscale it, so distant objects get bigger pixels and
+// the detector can resolve them. Returns the source element/canvas to detect.
+function detectionSource() {
+  if (nativeZoom || zoom <= 1.001) {
+    detCrop = null;
+    return video;
+  }
+  const W = video.videoWidth;
+  const H = video.videoHeight;
+  if (!W || !H) {
+    detCrop = null;
+    return video;
+  }
+  const cw = W / zoom;
+  const ch = H / zoom;
+  const cx = (W - cw) / 2;
+  const cy = (H - ch) / 2;
+  detCanvas.width = W;
+  detCanvas.height = H;
+  detCtx.drawImage(video, cx, cy, cw, ch, 0, 0, W, H);
+  detCrop = { cx, cy, scale: zoom };
+  return detCanvas;
+}
+
+// Map a detection box from cropped det-space back into video-intrinsic space.
+function mapBox(b) {
+  if (!detCrop) return b;
+  const { cx, cy, scale } = detCrop;
+  return [cx + b[0] / scale, cy + b[1] / scale, b[2] / scale, b[3] / scale];
 }
 
 // ----------------------------------------------------------- data feeds
@@ -90,10 +189,13 @@ async function loop() {
   try {
     sizeCanvas(canvas, video);
 
-    const detections = await detect(video, {
+    // Detect on the (digitally) zoomed crop, then map boxes back to video space.
+    const source = detectionSource();
+    const raw = await detect(source, {
       minScore: settings.confidence,
       maxObjects: 30
     });
+    const detections = raw.map((d) => ({ ...d, bbox: mapBox(d.bbox) }));
 
     const active = tracker.update(detections);
 
@@ -200,7 +302,10 @@ async function start() {
     await startCamera();
 
     setStatus('Loading detector (first time needs internet)…');
-    await loadDetector({ customModelUrl: settings.customModelUrl || undefined });
+    await loadDetector({
+      customModelUrl: settings.customModelUrl || undefined,
+      highAccuracy: settings.highAccuracy
+    });
 
     // Best-effort sensors for the identification fusion.
     if (settings.fusion || settings.ais || settings.adsb) {
@@ -227,6 +332,67 @@ function pause() {
   running = false;
   document.getElementById('startBtn').textContent = '▶ Resume';
   setStatus('Paused.');
+}
+
+// Swap the detection model live when the accuracy / custom-model setting changes.
+async function reloadDetector() {
+  try {
+    setStatus('Switching detection model…');
+    await loadDetector({
+      customModelUrl: settings.customModelUrl || undefined,
+      highAccuracy: settings.highAccuracy
+    });
+    tracker.reset();
+    setStatus('');
+  } catch (e) {
+    setStatus(`⚠️ ${e.message || e}`, 'error');
+  }
+}
+
+// --- Zoom input wiring --------------------------------------------------
+function zoomStep() {
+  return nativeZoom
+    ? Math.max(nativeZoom.step, (nativeZoom.max - nativeZoom.min) / 12)
+    : 0.5;
+}
+
+function touchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+function setupPinch() {
+  const stage = document.getElementById('stage');
+  let startDist = 0;
+  let startZoom = 1;
+  stage.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length === 2) {
+        startDist = touchDist(e.touches);
+        startZoom = zoom;
+      }
+    },
+    { passive: true }
+  );
+  stage.addEventListener(
+    'touchmove',
+    (e) => {
+      if (e.touches.length === 2 && startDist) {
+        e.preventDefault();
+        applyZoom(startZoom * (touchDist(e.touches) / startDist));
+      }
+    },
+    { passive: false }
+  );
+  stage.addEventListener(
+    'touchend',
+    (e) => {
+      if (e.touches.length < 2) startDist = 0;
+    },
+    { passive: true }
+  );
 }
 
 function toggleStart() {
@@ -268,8 +434,24 @@ function init() {
       lastDataSync = 0; // force a feed re-sync on next loop tick
       if (!running) syncFeeds();
     }
+    if (['highAccuracy', 'customModel'].includes(changed) && running) {
+      reloadDetector();
+    }
   });
   wireDrawerButtons();
+
+  // Zoom: slider, +/- buttons and pinch-to-zoom.
+  const zoomSlider = document.getElementById('zoomSlider');
+  zoomSlider.addEventListener('input', () =>
+    applyZoom(parseFloat(zoomSlider.value))
+  );
+  document
+    .getElementById('zoomIn')
+    .addEventListener('click', () => applyZoom(zoom + zoomStep()));
+  document
+    .getElementById('zoomOut')
+    .addEventListener('click', () => applyZoom(zoom - zoomStep()));
+  setupPinch();
   renderCounters({}, {});
   renderLog();
 

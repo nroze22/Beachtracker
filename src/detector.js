@@ -11,14 +11,16 @@ import { TRACKED_CLASSES } from './classes.js';
 
 let model = null;
 
-export async function loadDetector({ customModelUrl } = {}) {
+export async function loadDetector({ customModelUrl, highAccuracy = true } = {}) {
   await tf.ready();
   try {
     await tf.setBackend('webgl');
   } catch {
     // Fall back to CPU/wasm default if WebGL is unavailable.
   }
-  const opts = { base: 'lite_mobilenet_v2' };
+  // The full mobilenet_v2 base is noticeably better at small / distant objects
+  // (like a ship far out on the water) than the lite base, at some FPS cost.
+  const opts = { base: highAccuracy ? 'mobilenet_v2' : 'lite_mobilenet_v2' };
   // A custom model URL must point to a COCO-SSD-compatible model.json
   // (e.g. an SSD MobileNet you retrained on seals/otters and exported to TF.js).
   if (customModelUrl) opts.modelUrl = customModelUrl;

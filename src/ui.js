@@ -171,6 +171,7 @@ export function closeDrawer(id) {
 export function initSettingsUI(onChange) {
   const conf = $('confSlider');
   const confVal = $('confVal');
+  const acc = $('accToggle');
   const fov = $('fovSlider');
   const fovVal = $('fovVal');
   const ais = $('aisToggle');
@@ -181,6 +182,7 @@ export function initSettingsUI(onChange) {
 
   conf.value = settings.confidence;
   confVal.textContent = settings.confidence.toFixed(2);
+  acc.checked = settings.highAccuracy;
   fov.value = settings.fovDeg;
   fovVal.textContent = `${settings.fovDeg}°`;
   ais.checked = settings.ais;
@@ -198,6 +200,10 @@ export function initSettingsUI(onChange) {
     settings.confidence = parseFloat(conf.value);
     confVal.textContent = settings.confidence.toFixed(2);
     commit('confidence');
+  });
+  acc.addEventListener('change', () => {
+    settings.highAccuracy = acc.checked;
+    commit('highAccuracy');
   });
   fov.addEventListener('input', () => {
     settings.fovDeg = parseInt(fov.value, 10);

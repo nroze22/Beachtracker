@@ -33,7 +33,7 @@ export class Tracker {
    * @param {number} opts.maxAge        frames a track survives unmatched before deletion
    * @param {number} opts.minHits       consecutive hits before a track is confirmed & counted
    */
-  constructor({ iouThreshold = 0.25, maxAge = 12, minHits = 3 } = {}) {
+  constructor({ iouThreshold = 0.2, maxAge = 45, minHits = 2 } = {}) {
     this.iouThreshold = iouThreshold;
     this.maxAge = maxAge;
     this.minHits = minHits;
@@ -48,9 +48,14 @@ export class Tracker {
    * @returns {Array<Track>} active confirmed tracks (for drawing)
    */
   update(detections) {
-    // Predict: nudge each track's box by its last velocity.
+    // Predict: nudge each track's box by its last velocity, but only for a few
+    // frames after the last real detection — then freeze it in place so a box
+    // that's coasting (object still in view, detector just blinked) stays put
+    // instead of drifting off the target.
     for (const t of this.tracks.values()) {
-      t.bbox = [t.bbox[0] + t.vx, t.bbox[1] + t.vy, t.bbox[2], t.bbox[3]];
+      if (t.timeSinceUpdate < 5) {
+        t.bbox = [t.bbox[0] + t.vx, t.bbox[1] + t.vy, t.bbox[2], t.bbox[3]];
+      }
       t.timeSinceUpdate += 1;
       t.age += 1;
     }
@@ -98,7 +103,10 @@ export class Tracker {
       if (t.timeSinceUpdate > this.maxAge) this.tracks.delete(id);
     }
 
-    return [...this.tracks.values()].filter((t) => t.confirmed && t.timeSinceUpdate < 2);
+    // Keep drawing every confirmed track until it's actually retired, so the
+    // highlight persists the whole time the object is on screen rather than
+    // flashing for a frame and disappearing.
+    return [...this.tracks.values()].filter((t) => t.confirmed);
   }
 
   _maybeConfirm(t) {
@@ -113,7 +121,7 @@ export class Tracker {
   liveCounts() {
     const counts = {};
     for (const t of this.tracks.values()) {
-      if (t.confirmed && t.timeSinceUpdate < 2) {
+      if (t.confirmed) {
         counts[t.class] = (counts[t.class] || 0) + 1;
       }
     }

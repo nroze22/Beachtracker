@@ -177,6 +177,52 @@ body {
   color: var(--muted);
 }
 
+/* ---------------- zoom control ---------------- */
+.zoomctl {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  z-index: 6;
+}
+.zoomctl[hidden] {
+  display: none;
+}
+.zoomrange {
+  width: min(46vw, 240px);
+  accent-color: var(--accent);
+}
+.zoombtn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.zoombtn:active {
+  transform: scale(0.9);
+}
+.zoomlabel {
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
 /* ---------------- controls ---------------- */
 #controls {
   display: flex;

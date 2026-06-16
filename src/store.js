@@ -5,7 +5,8 @@ const SETTINGS_KEY = 'beachtracker.settings.v1';
 const LOG_KEY = 'beachtracker.log.v1';
 
 const DEFAULT_SETTINGS = {
-  confidence: 0.45,
+  confidence: 0.3, // lower so faint / distant ships still register
+  highAccuracy: true, // use the full mobilenet_v2 base
   ais: false,
   aisKey: '',
   adsb: false,
