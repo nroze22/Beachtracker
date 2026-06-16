@@ -85,3 +85,26 @@ export const MANUAL_TAGS = {
   seal: { label: 'Seal', emoji: '🦭', kind: 'seal' },
   otter: { label: 'Otter', emoji: '🦦', kind: 'otter' }
 };
+
+// Scene presets filter which raw COCO classes are kept, to cut irrelevant
+// false positives (e.g. furniture mislabelled while you point inland).
+export const SCENES = {
+  all: { label: 'All', emoji: '🌎', classes: null },
+  water: {
+    label: 'Water',
+    emoji: '🌊',
+    classes: ['boat', 'bird', 'seal', 'sea lion', 'otter']
+  },
+  sky: { label: 'Sky', emoji: '🛩️', classes: ['airplane', 'bird', 'kite'] },
+  beach: {
+    label: 'Beach',
+    emoji: '🏖️',
+    classes: ['person', 'dog', 'surfboard', 'umbrella', 'kite', 'bird']
+  }
+};
+
+// True if a raw detection class is allowed by the given scene.
+export function sceneAllows(rawClass, scene) {
+  const s = SCENES[scene] || SCENES.all;
+  return !s.classes || s.classes.includes(rawClass);
+}

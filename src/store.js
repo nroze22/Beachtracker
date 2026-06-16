@@ -12,7 +12,10 @@ const DEFAULT_SETTINGS = {
   adsb: false,
   fusion: false,
   fovDeg: 65, // typical rear-camera horizontal FOV on an iPhone
-  customModelUrl: ''
+  customModelUrl: '',
+  scene: 'all', // detection scene filter: all | water | sky | beach
+  farScan: true, // alternate a 2x centre-crop pass to catch distant objects
+  radar: true // show the AIS/ADS-B radar minimap
 };
 
 function load(key, fallback) {
@@ -75,6 +78,47 @@ export function updateSighting(id, patch) {
 export function clearLog() {
   sightingLog.length = 0;
   persistLog();
+}
+
+// --- Snapshots (captured stills) ---------------------------------------
+// Kept in their own capped store so the base log stays small.
+const SNAP_KEY = 'beachtracker.snaps.v1';
+const SNAP_CAP = 24;
+
+export let snapshots = (() => {
+  try {
+    const raw = localStorage.getItem(SNAP_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+})();
+
+export function addSnapshot({ img, caption, lat, lon }) {
+  const item = { id: `snap-${Date.now()}`, t: Date.now(), img, caption, lat, lon };
+  snapshots.push(item);
+  if (snapshots.length > SNAP_CAP) snapshots = snapshots.slice(-SNAP_CAP);
+  try {
+    localStorage.setItem(SNAP_KEY, JSON.stringify(snapshots));
+  } catch {
+    // Storage full: drop the oldest half and retry once.
+    snapshots = snapshots.slice(-Math.floor(SNAP_CAP / 2));
+    try {
+      localStorage.setItem(SNAP_KEY, JSON.stringify(snapshots));
+    } catch {
+      /* give up silently */
+    }
+  }
+  return item;
+}
+
+export function clearSnapshots() {
+  snapshots = [];
+  try {
+    localStorage.removeItem(SNAP_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function logToCsv() {

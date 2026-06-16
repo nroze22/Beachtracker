@@ -23,6 +23,12 @@
         <!-- Live per-class counters -->
         <div id="counters" class="panel"></div>
 
+        <!-- Scene filter (All / Water / Sky / Beach) -->
+        <div id="sceneBar" class="scenebar"></div>
+
+        <!-- Heads-up radar of nearby ships & planes -->
+        <canvas id="radar" class="radar" width="140" height="140" hidden></canvas>
+
         <!-- Status / messages -->
         <div id="status" class="status">Tap <b>Start</b> to begin spotting.</div>
 
@@ -42,8 +48,9 @@
       <div id="controls">
         <button id="startBtn" class="btn primary">▶ Start</button>
         <button id="flipBtn" class="btn" title="Flip camera">⟳</button>
-        <button id="sealBtn" class="btn tag" title="Log a seal sighting">🦭 Seal</button>
-        <button id="otterBtn" class="btn tag" title="Log an otter sighting">🦦 Otter</button>
+        <button id="snapBtn" class="btn" title="Snapshot">📸</button>
+        <button id="sealBtn" class="btn tag" title="Log a seal sighting">🦭</button>
+        <button id="otterBtn" class="btn tag" title="Log an otter sighting">🦦</button>
         <button id="logBtn" class="btn" title="Sighting log">📋</button>
         <button id="settingsBtn" class="btn" title="Settings">⚙️</button>
       </div>
@@ -55,6 +62,7 @@
         <h2>Sighting log</h2>
         <button class="btn ghost" data-close="logDrawer">✕</button>
       </div>
+      <div id="snapGallery" class="snapgallery" hidden></div>
       <div id="logStats" class="logstats"></div>
       <div id="logList" class="loglist"></div>
       <div class="drawer-foot">
@@ -79,6 +87,16 @@
         <label class="toggle">
           <input id="accToggle" type="checkbox" />
           <span>High-accuracy model <small>(better at distant ships, a bit slower)</small></span>
+        </label>
+
+        <label class="toggle">
+          <input id="farScanToggle" type="checkbox" />
+          <span>Far-scan <small>(extra zoomed pass each frame to catch distant objects)</small></span>
+        </label>
+
+        <label class="toggle">
+          <input id="radarToggle" type="checkbox" />
+          <span>Show radar minimap <small>(nearby ships &amp; planes, needs GPS)</small></span>
         </label>
 
         <label class="toggle">
@@ -118,6 +136,13 @@
           except aisstream.io.
         </p>
       </div>
+    </div>
+
+    <!-- Fullscreen snapshot viewer -->
+    <div id="viewer" class="viewer" hidden>
+      <button class="btn ghost viewer-close" id="viewerClose">✕</button>
+      <img id="viewerImg" alt="snapshot" />
+      <a id="viewerSave" class="btn" download="beachtracker.jpg">⬇ Save</a>
     </div>
 
     <script type="module" src="/src/main.js"></script>

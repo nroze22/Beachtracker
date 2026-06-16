@@ -1,12 +1,14 @@
 // DOM glue: counters, status line, identity cards, drawers, settings.
 
-import { describe } from './classes.js';
+import { describe, SCENES } from './classes.js';
 import {
   settings,
   saveSettings,
   sightingLog,
   clearLog,
-  logToCsv
+  logToCsv,
+  snapshots,
+  clearSnapshots
 } from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -102,11 +104,78 @@ function card(emoji, title, bits) {
   </div>`;
 }
 
+// --- Scene selector -----------------------------------------------------
+
+export function buildSceneBar() {
+  const bar = $('sceneBar');
+  bar.innerHTML = Object.entries(SCENES)
+    .map(
+      ([key, s]) =>
+        `<button class="scenechip${key === settings.scene ? ' active' : ''}" data-scene="${key}">${s.emoji} ${s.label}</button>`
+    )
+    .join('');
+  bar.querySelectorAll('.scenechip').forEach((b) =>
+    b.addEventListener('click', () => {
+      settings.scene = b.dataset.scene;
+      saveSettings();
+      bar.querySelectorAll('.scenechip').forEach((x) =>
+        x.classList.toggle('active', x.dataset.scene === settings.scene)
+      );
+    })
+  );
+}
+
+// --- Snapshot viewer + flash -------------------------------------------
+
+export function wireViewer() {
+  const v = $('viewer');
+  $('viewerClose').addEventListener('click', () => (v.hidden = true));
+  v.addEventListener('click', (e) => {
+    if (e.target === v) v.hidden = true;
+  });
+}
+
+export function openViewer(src) {
+  $('viewerImg').src = src;
+  $('viewerSave').href = src;
+  $('viewer').hidden = false;
+}
+
+export function flashSnap() {
+  const el = document.createElement('div');
+  el.className = 'snap-flash';
+  document.getElementById('stage').appendChild(el);
+  setTimeout(() => el.remove(), 320);
+}
+
+function renderSnapGallery() {
+  const g = $('snapGallery');
+  if (!g) return;
+  if (!snapshots.length) {
+    g.innerHTML = '';
+    g.hidden = true;
+    return;
+  }
+  g.hidden = false;
+  g.innerHTML = snapshots
+    .slice()
+    .reverse()
+    .map(
+      (s) =>
+        `<img class="snapthumb" src="${s.img}" data-id="${s.id}" alt="snapshot" />`
+    )
+    .join('');
+  g.querySelectorAll('.snapthumb').forEach((img) =>
+    img.addEventListener('click', () => openViewer(img.src))
+  );
+}
+
 // --- Sighting log drawer ------------------------------------------------
 
 export function renderLog() {
   const list = $('logList');
   const stats = $('logStats');
+  renderSnapGallery();
 
   const byKind = {};
   for (const s of sightingLog) byKind[s.kind] = (byKind[s.kind] || 0) + 1;
@@ -172,6 +241,8 @@ export function initSettingsUI(onChange) {
   const conf = $('confSlider');
   const confVal = $('confVal');
   const acc = $('accToggle');
+  const farScan = $('farScanToggle');
+  const radar = $('radarToggle');
   const fov = $('fovSlider');
   const fovVal = $('fovVal');
   const ais = $('aisToggle');
@@ -183,6 +254,8 @@ export function initSettingsUI(onChange) {
   conf.value = settings.confidence;
   confVal.textContent = settings.confidence.toFixed(2);
   acc.checked = settings.highAccuracy;
+  farScan.checked = settings.farScan;
+  radar.checked = settings.radar;
   fov.value = settings.fovDeg;
   fovVal.textContent = `${settings.fovDeg}°`;
   ais.checked = settings.ais;
@@ -204,6 +277,14 @@ export function initSettingsUI(onChange) {
   acc.addEventListener('change', () => {
     settings.highAccuracy = acc.checked;
     commit('highAccuracy');
+  });
+  farScan.addEventListener('change', () => {
+    settings.farScan = farScan.checked;
+    commit('farScan');
+  });
+  radar.addEventListener('change', () => {
+    settings.radar = radar.checked;
+    commit('radar');
   });
   fov.addEventListener('input', () => {
     settings.fovDeg = parseInt(fov.value, 10);
@@ -247,8 +328,9 @@ export function wireDrawerButtons() {
     URL.revokeObjectURL(url);
   });
   $('clearLogBtn').addEventListener('click', () => {
-    if (confirm('Clear the entire sighting log?')) {
+    if (confirm('Clear the entire sighting log and snapshots?')) {
       clearLog();
+      clearSnapshots();
       renderLog();
     }
   });

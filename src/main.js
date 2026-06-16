@@ -10,8 +10,9 @@ import { startGeo, geo } from './geo.js';
 import { AisClient } from './ais.js';
 import { AdsbClient } from './adsb.js';
 import { fuse } from './fusion.js';
-import { describe, vesselSubtype, MANUAL_TAGS } from './classes.js';
-import { settings, addSighting, updateSighting } from './store.js';
+import { drawRadar } from './radar.js';
+import { describe, vesselSubtype, sceneAllows, MANUAL_TAGS } from './classes.js';
+import { settings, addSighting, updateSighting, addSnapshot } from './store.js';
 import {
   setStatus,
   renderCounters,
@@ -19,12 +20,17 @@ import {
   renderLog,
   initSettingsUI,
   wireDrawerButtons,
-  openDrawer
+  openDrawer,
+  buildSceneBar,
+  wireViewer,
+  flashSnap
 } from './ui.js';
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
+const radarCanvas = document.getElementById('radar');
+const radarCtx = radarCanvas.getContext('2d');
 
 // Sticky tracker: confirms fast (minHits) and coasts a long time (maxAge) so a
 // highlight stays on the target the whole time it's in view.
@@ -105,28 +111,31 @@ function applyZoom(z) {
   canvas.style.transform = t;
 }
 
-// Build the image we actually run detection on. For digital zoom we crop the
-// centre of the frame and upscale it, so distant objects get bigger pixels and
-// the detector can resolve them. Returns the source element/canvas to detect.
+// Build the image we run detection on. We crop+upscale the centre of the frame
+// so distant objects get bigger pixels. The effective crop factor is the user's
+// zoom, or — when not zoomed and far-scan is on — a 2x centre crop on alternate
+// frames so the tracker accumulates both wide and far detections over time.
+let farScanPhase = false;
 function detectionSource() {
-  if (zoom <= 1.001) {
-    detCrop = null;
-    return video;
-  }
   const W = video.videoWidth;
   const H = video.videoHeight;
-  if (!W || !H) {
+  let factor = zoom;
+  if (zoom <= 1.001) {
+    farScanPhase = settings.farScan ? !farScanPhase : false;
+    factor = farScanPhase ? 2 : 1;
+  }
+  if (factor <= 1.001 || !W || !H) {
     detCrop = null;
     return video;
   }
-  const cw = W / zoom;
-  const ch = H / zoom;
+  const cw = W / factor;
+  const ch = H / factor;
   const cx = (W - cw) / 2;
   const cy = (H - ch) / 2;
   detCanvas.width = W;
   detCanvas.height = H;
   detCtx.drawImage(video, cx, cy, cw, ch, 0, 0, W, H);
-  detCrop = { cx, cy, scale: zoom };
+  detCrop = { cx, cy, scale: factor };
   return detCanvas;
 }
 
@@ -207,7 +216,9 @@ async function loop() {
       minScore: settings.confidence,
       maxObjects: 30
     });
-    const detections = raw.map((d) => ({ ...d, bbox: mapBox(d.bbox) }));
+    const detections = raw
+      .filter((d) => sceneAllows(d.class, settings.scene))
+      .map((d) => ({ ...d, bbox: mapBox(d.bbox) }));
 
     const active = tracker.update(detections);
     lastActive = active; // for tap-to-dismiss hit testing
@@ -239,6 +250,7 @@ async function loop() {
       totals: vesselTotals
     });
     renderIdCards(idents);
+    renderRadar(idents);
 
     // Refresh feed subscriptions when the GPS fix first arrives / moves.
     const now = performance.now();
@@ -250,6 +262,45 @@ async function loop() {
     console.error(e);
   }
   requestAnimationFrame(loop);
+}
+
+// Draw the heads-up radar of nearby ships/planes, or hide it when off.
+function renderRadar(idents) {
+  const show = settings.radar && (settings.ais || settings.adsb) && geo.hasFix;
+  radarCanvas.hidden = !show;
+  if (!show) return;
+  const matchedKeys = new Set();
+  for (const id of idents.values()) matchedKeys.add(id.mmsi || id.hex);
+  drawRadar(radarCtx, {
+    geo,
+    vessels: settings.ais ? ais.active() : [],
+    aircraft: settings.adsb ? adsb.active() : [],
+    fovDeg: settings.fovDeg,
+    matchedKeys
+  });
+}
+
+// Composite the current frame + overlay into a downsized JPEG and log it.
+function captureSnapshot() {
+  if (!video.videoWidth) return;
+  const targetW = 480;
+  const ratio = video.videoHeight / video.videoWidth;
+  const out = document.createElement('canvas');
+  out.width = targetW;
+  out.height = Math.round(targetW * ratio);
+  const octx = out.getContext('2d');
+  octx.drawImage(video, 0, 0, out.width, out.height);
+  octx.drawImage(canvas, 0, 0, out.width, out.height); // include the reticles
+  let img;
+  try {
+    img = out.toDataURL('image/jpeg', 0.55);
+  } catch {
+    return; // tainted canvas (shouldn't happen with same-origin camera)
+  }
+  addSnapshot({ img, lat: geo.lat ?? undefined, lon: geo.lon ?? undefined });
+  flashSnap();
+  setStatus('📸 Snapshot saved', 'flash');
+  setTimeout(() => running && setStatus(''), 1000);
 }
 
 // Log each newly-confirmed track once, and enrich it with identity later.
@@ -407,7 +458,7 @@ function setupGestures() {
         tap = null;
       } else if (e.touches.length === 1) {
         // Ignore taps that start on overlay UI (zoom control, chips, cards).
-        if (e.target.closest('.zoomctl, #counters, #idcards, button')) {
+        if (e.target.closest('.zoomctl, #counters, #idcards, #radar, .scenebar, button')) {
           tap = null;
           return;
         }
@@ -502,11 +553,14 @@ function init() {
     .getElementById('zoomOut')
     .addEventListener('click', () => applyZoom(zoom - zoomStep()));
   setupGestures();
+  buildSceneBar();
+  wireViewer();
   renderCounters({}, {});
   renderLog();
 
   document.getElementById('startBtn').addEventListener('click', toggleStart);
   document.getElementById('flipBtn').addEventListener('click', flipCamera);
+  document.getElementById('snapBtn').addEventListener('click', captureSnapshot);
   document
     .getElementById('sealBtn')
     .addEventListener('click', () => logManual('seal'));

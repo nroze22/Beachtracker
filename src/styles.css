@@ -179,6 +179,116 @@ body {
   color: var(--muted);
 }
 
+/* ---------------- scene bar ---------------- */
+.scenebar {
+  position: absolute;
+  top: calc(var(--safe-t) + 52px);
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  z-index: 5;
+}
+.scenechip {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(8, 20, 33, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.scenechip.active {
+  color: #04121f;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---------------- radar ---------------- */
+.radar {
+  position: absolute;
+  left: 12px;
+  bottom: calc(var(--safe-b) + 16px);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  z-index: 5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.radar[hidden] {
+  display: none;
+}
+
+/* ---------------- snapshot flash + viewer ---------------- */
+.snap-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  z-index: 9;
+  pointer-events: none;
+  animation: snapflash 0.3s ease;
+}
+@keyframes snapflash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: calc(var(--safe-t) + 12px) 12px calc(var(--safe-b) + 12px);
+}
+.viewer[hidden] {
+  display: none;
+}
+.viewer img {
+  max-width: 100%;
+  max-height: 78%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.viewer-close {
+  position: absolute;
+  top: calc(var(--safe-t) + 8px);
+  right: 12px;
+  font-size: 26px;
+}
+.viewer a {
+  text-decoration: none;
+}
+
+/* ---------------- snapshot gallery (log drawer) ---------------- */
+.snapgallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 16px 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.snapthumb {
+  height: 64px;
+  width: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
 /* ---------------- zoom control ---------------- */
 .zoomctl {
   position: absolute;

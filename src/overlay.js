@@ -1,10 +1,13 @@
-// Draws tracked boxes, labels and matched identities onto the overlay canvas.
+// Draws tracked objects as smooth, confidence-styled corner-bracket reticles
+// with identity labels. Boxes are interpolated frame-to-frame so they glide
+// onto the target instead of snapping.
 
 import { describe } from './classes.js';
 
+// Per-track render state for smoothing (id -> {x,y,w,h}).
+const render = new Map();
+
 export function sizeCanvas(canvas, video) {
-  // Match the canvas backing store to the video's intrinsic resolution so our
-  // detection-space coordinates line up 1:1 with what we draw.
   const w = video.videoWidth || canvas.clientWidth;
   const h = video.videoHeight || canvas.clientHeight;
   if (canvas.width !== w || canvas.height !== h) {
@@ -14,32 +17,45 @@ export function sizeCanvas(canvas, video) {
   return { w, h };
 }
 
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
 export function draw(ctx, tracks, idents) {
   const { canvas } = ctx;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const scale = canvas.width / 640; // keep strokes/text readable at any res
-  const lineW = Math.max(2, 2.4 * scale);
+  const scale = canvas.width / 640;
   const fontPx = Math.max(13, 15 * scale);
-  ctx.lineWidth = lineW;
   ctx.font = `600 ${fontPx}px -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = 'top';
 
+  const live = new Set();
+
   for (const t of tracks) {
-    // Use the refined vessel subtype (fishing boat, ferry…) when known.
+    live.add(t.id);
     const meta = t.subtype || describe(t.class);
-    const [x, y, w, h] = t.bbox;
     const ident = idents.get(t.id);
 
-    ctx.strokeStyle = meta.color;
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = 4 * scale;
-    ctx.strokeRect(x, y, w, h);
-    ctx.shadowBlur = 0;
+    // Smooth the drawn box toward the tracker's target box.
+    let r = render.get(t.id);
+    if (!r) {
+      r = { x: t.bbox[0], y: t.bbox[1], w: t.bbox[2], h: t.bbox[3] };
+      render.set(t.id, r);
+    } else {
+      const k = 0.4;
+      r.x = lerp(r.x, t.bbox[0], k);
+      r.y = lerp(r.y, t.bbox[1], k);
+      r.w = lerp(r.w, t.bbox[2], k);
+      r.h = lerp(r.h, t.bbox[3], k);
+    }
 
-    // Primary label: emoji + friendly name + track id.
-    const pct = Math.round((t.score || 0) * 100);
-    let line1 = `${meta.emoji} ${meta.label} #${t.id} · ${pct}%`;
-    // Identity line (ship name / flight), if fused.
+    const score = t.score || 0;
+    const alpha = Math.max(0.5, Math.min(1, score + 0.25));
+    drawReticle(ctx, r, meta.color, scale, alpha);
+
+    // Labels
+    const pct = Math.round(score * 100);
+    const line1 = `${meta.emoji} ${meta.label} · ${pct}%`;
     let line2 = null;
     if (ident) {
       if (ident.kind === 'boat') {
@@ -54,31 +70,66 @@ export function draw(ctx, tracks, idents) {
         line2 = `🛰 ${bits.join(' · ')}`;
       }
     }
-
-    drawLabel(ctx, x, y, [line1, line2].filter(Boolean), meta.color, scale, fontPx);
+    drawLabel(ctx, r.x, r.y, [line1, line2].filter(Boolean), meta.color, scale, fontPx);
   }
+
+  // Drop render state for retired tracks.
+  for (const id of [...render.keys()]) if (!live.has(id)) render.delete(id);
+}
+
+function drawReticle(ctx, r, color, scale, alpha) {
+  const { x, y, w, h } = r;
+  const len = Math.max(10, Math.min(w, h) * 0.22);
+  const lw = Math.max(2.5, 3 * scale);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 4 * scale;
+
+  // Four L-shaped corner brackets.
+  const corners = [
+    [x, y, 1, 1],
+    [x + w, y, -1, 1],
+    [x, y + h, 1, -1],
+    [x + w, y + h, -1, -1]
+  ];
+  ctx.beginPath();
+  for (const [cx, cy, sx, sy] of corners) {
+    ctx.moveTo(cx, cy + sy * len);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + sx * len, cy);
+  }
+  ctx.stroke();
+
+  // Faint full outline for context.
+  ctx.globalAlpha = alpha * 0.18;
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(1, scale);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
 }
 
 function drawLabel(ctx, x, y, lines, color, scale, fontPx) {
-  const padX = 6 * scale;
+  const padX = 7 * scale;
   const padY = 4 * scale;
   const lineH = fontPx * 1.25;
   let maxW = 0;
   for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
-  const boxW = maxW + padX * 2;
+  const boxW = maxW + padX * 2 + 3 * scale;
   const boxH = lineH * lines.length + padY * 2;
-  let ly = y - boxH;
-  if (ly < 0) ly = y + 2; // flip below the box if it would clip the top
+  let ly = y - boxH - 2 * scale;
+  if (ly < 0) ly = y + 2;
 
-  ctx.fillStyle = 'rgba(8,18,30,0.78)';
-  roundRect(ctx, x, ly, boxW, boxH, 5 * scale);
+  ctx.fillStyle = 'rgba(8,18,30,0.82)';
+  roundRect(ctx, x, ly, boxW, boxH, 6 * scale);
   ctx.fill();
-  ctx.fillStyle = '#fff';
-  // Accent bar on the left in the class colour.
   ctx.fillStyle = color;
-  ctx.fillRect(x, ly, 3 * scale, boxH);
+  roundRect(ctx, x, ly, 3.5 * scale, boxH, 2 * scale);
+  ctx.fill();
 
-  ctx.fillStyle = '#fff';
   let ty = ly + padY;
   for (let i = 0; i < lines.length; i++) {
     ctx.fillStyle = i === 0 ? '#fff' : '#bfe9ff';
