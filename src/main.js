@@ -10,7 +10,7 @@ import { startGeo, geo } from './geo.js';
 import { AisClient } from './ais.js';
 import { AdsbClient } from './adsb.js';
 import { fuse } from './fusion.js';
-import { describe, MANUAL_TAGS } from './classes.js';
+import { describe, vesselSubtype, MANUAL_TAGS } from './classes.js';
 import { settings, addSighting, updateSighting } from './store.js';
 import {
   setStatus,
@@ -34,6 +34,8 @@ let running = false;
 let facing = 'environment';
 let lastIdents = new Map();
 let lastDataSync = 0;
+// Cumulative unique counts of AIS-identified vessel subtypes (fishing, ferry…).
+const vesselTotals = {};
 
 // ------------------------------------------------------------------ camera
 
@@ -108,6 +110,8 @@ async function loop() {
       for (const t of active) {
         if (idents.has(t.id)) t.ident = idents.get(t.id);
         else if (t.ident) idents.set(t.id, t.ident);
+        // Refine generic "boat" into a fishing boat / ferry / cargo ship / …
+        if (t.class === 'boat' && t.ident) t.subtype = vesselSubtype(t.ident);
       }
     }
     lastIdents = idents;
@@ -115,7 +119,10 @@ async function loop() {
     draw(ctx, active, idents);
     handleCounts(active, idents);
 
-    renderCounters(tracker.liveCounts(), tracker.totals);
+    renderCounters(tracker.liveCounts(), tracker.totals, {
+      live: liveVesselCounts(active),
+      totals: vesselTotals
+    });
     renderIdCards(idents);
 
     // Refresh feed subscriptions when the GPS fix first arrives / moves.
@@ -153,13 +160,33 @@ function handleCounts(tracks, idents) {
           id.kind === 'boat'
             ? id.name || `MMSI ${id.mmsi}`
             : id.flight || id.reg || id.hex;
+        // Promote a generic boat to its identified vessel subtype, counting it
+        // once and relabelling its log entry (e.g. "Fishing boat — F/V Pacific").
+        const sub = t.class === 'boat' ? vesselSubtype(id) : null;
+        if (sub && !t._subCounted) {
+          t._subCounted = true;
+          vesselTotals[sub.kind] = (vesselTotals[sub.kind] || 0) + 1;
+        }
+        const baseLabel = sub ? sub.label : describe(t.class).label;
         updateSighting(t._sightingId, {
-          label: `${describe(t.class).label} — ${label}`,
+          kind: sub ? sub.kind : describe(t.class).kind,
+          label: `${baseLabel} — ${label}`,
           meta: id
         });
       }
     }
   }
+}
+
+// Currently-visible counts of identified vessel subtypes, keyed by subtype kind.
+function liveVesselCounts(tracks) {
+  const counts = {};
+  for (const t of tracks) {
+    if (t.class === 'boat' && t.subtype) {
+      counts[t.subtype.kind] = (counts[t.subtype.kind] || 0) + 1;
+    }
+  }
+  return counts;
 }
 
 // ------------------------------------------------------------- controls

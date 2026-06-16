@@ -20,30 +20,45 @@ export function setStatus(msg, kind = '') {
 
 // --- Live counters ------------------------------------------------------
 
-export function renderCounters(live, totals) {
+export function renderCounters(live, totals, vessel) {
   const el = $('counters');
   // Union of classes seen live or ever.
   const keys = new Set([...Object.keys(live), ...Object.keys(totals)]);
   // Stable, meaningful order (unlisted classes fall to the end).
-  const order = ['boat', 'airplane', 'bird', 'seal', 'otter', 'person', 'dog'];
+  const order = [
+    'boat', 'airplane', 'bird', 'seal', 'otter',
+    'kite', 'surfboard', 'umbrella', 'person', 'dog'
+  ];
   const rank = (k) => (order.indexOf(k) === -1 ? 99 : order.indexOf(k));
   const sorted = [...keys].sort((a, b) => rank(a) - rank(b));
-  if (!sorted.length) {
-    el.innerHTML = '<div class="chip muted">No detections yet…</div>';
-    return;
-  }
-  el.innerHTML = sorted
-    .map((k) => {
-      const m = describe(k);
-      const now = live[k] || 0;
-      const total = totals[k] || 0;
-      return `<div class="chip" style="--c:${m.color}">
+
+  const chip = (k, now, total) => {
+    const m = describe(k);
+    return `<div class="chip" style="--c:${m.color}">
         <span class="chip-emoji">${m.emoji}</span>
         <span class="chip-now">${now}</span>
         <span class="chip-total">/ ${total}</span>
       </div>`;
-    })
-    .join('');
+  };
+
+  // Identified vessel subtypes (fishing boat, ferry, cargo…) as a second group.
+  const vKeys = vessel
+    ? new Set([...Object.keys(vessel.live), ...Object.keys(vessel.totals)])
+    : new Set();
+
+  if (!sorted.length && !vKeys.size) {
+    el.innerHTML = '<div class="chip muted">No detections yet…</div>';
+    return;
+  }
+
+  let html = sorted.map((k) => chip(k, live[k] || 0, totals[k] || 0)).join('');
+  if (vKeys.size) {
+    html += '<div class="chip-sep" aria-hidden="true"></div>';
+    html += [...vKeys]
+      .map((k) => chip(k, vessel.live[k] || 0, vessel.totals[k] || 0))
+      .join('');
+  }
+  el.innerHTML = html;
 }
 
 // --- Identity cards (matched ships/planes) ------------------------------
@@ -131,7 +146,7 @@ export function renderLog() {
 
 function buildDetail(s) {
   const m = s.meta;
-  if (s.kind === 'boat') {
+  if (s.kind === 'boat' || s.kind.startsWith('vessel_')) {
     return [m.typeName, m.destination ? `→ ${m.destination}` : null]
       .filter(Boolean)
       .join(' · ');

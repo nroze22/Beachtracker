@@ -105,6 +105,7 @@ export class AisClient {
         v.heading = pr.TrueHeading;
       } else if (msg.MessageType === 'ShipStaticData') {
         const sd = msg.Message?.ShipStaticData || {};
+        v.typeCode = sd.Type;
         v.typeName = shipTypeName(sd.Type);
         v.destination = (sd.Destination || '').trim();
         v.callsign = (sd.CallSign || '').trim();

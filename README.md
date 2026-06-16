@@ -15,7 +15,8 @@ Open it in Safari, tap *Add to Home Screen*, and it runs like a native app.
 
 | Feature | How |
 | --- | --- |
-| 🐦 / 🚢 / ✈️ **Detection** | TensorFlow.js **COCO-SSD** runs on the phone GPU (WebGL). Works fully offline. Detects `bird` (gulls), `boat` (ships), `airplane` (planes), plus people & dogs. |
+| 🐦 / 🚢 / ✈️ **Detection** | TensorFlow.js **COCO-SSD** runs on the phone GPU (WebGL). Works fully offline. Detects seagulls (`bird`), ships (`boat`), planes (`airplane`), plus beach regulars: kites 🪁, surfboards 🏄, beach umbrellas ⛱️, people & dogs. |
+| 🎣 **Vessel types** | A generic `boat` is promoted to its real type — **fishing boat, sailboat, ferry, cargo ship, tanker, tug, military** — using the AIS ship-type code, with its own emoji, colour and counter. |
 | 🔢 **Counting** | A **SORT-style IoU tracker** gives every object a stable ID across frames, so you get honest *unique* counts (live on-screen **and** cumulative) instead of double-counting the same gull every frame. |
 | 🛰 **Ship identity** | Live **AIS** via [aisstream.io](https://aisstream.io) — name, type, destination, speed. |
 | 🛰 **Plane identity** | Live **ADS-B** via the free, key-less [adsb.lol](https://api.adsb.lol) — flight, aircraft type, altitude. |

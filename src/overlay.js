@@ -25,7 +25,8 @@ export function draw(ctx, tracks, idents) {
   ctx.textBaseline = 'top';
 
   for (const t of tracks) {
-    const meta = describe(t.class);
+    // Use the refined vessel subtype (fishing boat, ferry…) when known.
+    const meta = t.subtype || describe(t.class);
     const [x, y, w, h] = t.bbox;
     const ident = idents.get(t.id);
 

@@ -94,6 +94,12 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+.chip-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
 
 /* ---------------- status ---------------- */
 .status {
