@@ -592,6 +592,10 @@ function init() {
   });
   wireDrawerButtons();
 
+  // Show the build stamp so a stale cache is obvious.
+  const buildTag = document.getElementById('buildTag');
+  if (buildTag) buildTag.textContent = `BeachTracker · build ${__BUILD__}`;
+
   // Zoom: slider, +/- buttons and pinch-to-zoom.
   const zoomSlider = document.getElementById('zoomSlider');
   zoomSlider.addEventListener('input', () =>

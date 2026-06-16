@@ -6,8 +6,16 @@ import { VitePWA } from 'vite-plugin-pwa';
 // (e.g. BASE_PATH=/ when serving from a custom domain or a tunnel root).
 const base = process.env.BASE_PATH ?? '/Beachtracker/';
 
+// A human-readable build stamp so the running app can show exactly which version
+// is loaded (handy for spotting a stale PWA cache). Uses the CI commit + date.
+const sha = (process.env.GITHUB_SHA || 'dev').slice(0, 7);
+const buildId = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} · ${sha}`;
+
 export default defineConfig({
   base,
+  define: {
+    __BUILD__: JSON.stringify(buildId)
+  },
   server: {
     host: true,
     port: 5173
