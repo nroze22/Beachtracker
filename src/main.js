@@ -34,7 +34,7 @@ const radarCtx = radarCanvas.getContext('2d');
 
 // Sticky tracker: confirms fast (minHits) and coasts a long time (maxAge) so a
 // highlight stays on the target the whole time it's in view.
-const tracker = new Tracker({ iouThreshold: 0.2, maxAge: 45, minHits: 2 });
+const tracker = new Tracker({ iouThreshold: 0.2, maxAge: 40, minHits: 3 });
 const ais = new AisClient();
 const adsb = new AdsbClient();
 
@@ -56,7 +56,6 @@ const MAX_ZOOM = 8;
 // Offscreen canvas used to crop+upscale the centre of the frame.
 const detCanvas = document.createElement('canvas');
 const detCtx = detCanvas.getContext('2d', { willReadFrequently: true });
-let detCrop = null; // {cx, cy, scale} mapping det-space boxes back to video space
 
 // ------------------------------------------------------------------ camera
 
@@ -103,31 +102,17 @@ function applyZoom(z) {
   const slider = document.getElementById('zoomSlider');
   slider.value = zoom;
   document.getElementById('zoomLabel').textContent = `${zoom.toFixed(1)}×`;
-  // Scale the displayed video + overlay together about centre.
-  const t = zoom > 1.001 ? `scale(${zoom})` : '';
+  // Scale ONLY the video. The overlay canvas stays unscaled and we transform box
+  // geometry in code, so labels/reticle text keep a constant size while zooming.
   video.style.transformOrigin = 'center center';
-  canvas.style.transformOrigin = 'center center';
-  video.style.transform = t;
-  canvas.style.transform = t;
+  video.style.transform = zoom > 1.001 ? `scale(${zoom})` : '';
 }
 
-// Build the image we run detection on. We crop+upscale the centre of the frame
-// so distant objects get bigger pixels. The effective crop factor is the user's
-// zoom, or — when not zoomed and far-scan is on — a 2x centre crop on alternate
-// frames so the tracker accumulates both wide and far detections over time.
-let farScanPhase = false;
-function detectionSource() {
+// Draw the centre `factor`x crop of the frame into the offscreen canvas, so
+// distant objects get bigger pixels for the detector. Returns the crop mapping.
+function cropSource(factor) {
   const W = video.videoWidth;
   const H = video.videoHeight;
-  let factor = zoom;
-  if (zoom <= 1.001) {
-    farScanPhase = settings.farScan ? !farScanPhase : false;
-    factor = farScanPhase ? 2 : 1;
-  }
-  if (factor <= 1.001 || !W || !H) {
-    detCrop = null;
-    return video;
-  }
   const cw = W / factor;
   const ch = H / factor;
   const cx = (W - cw) / 2;
@@ -135,15 +120,66 @@ function detectionSource() {
   detCanvas.width = W;
   detCanvas.height = H;
   detCtx.drawImage(video, cx, cy, cw, ch, 0, 0, W, H);
-  detCrop = { cx, cy, scale: factor };
-  return detCanvas;
+  return { cx, cy, scale: factor };
 }
 
-// Map a detection box from cropped det-space back into video-intrinsic space.
-function mapBox(b) {
-  if (!detCrop) return b;
-  const { cx, cy, scale } = detCrop;
-  return [cx + b[0] / scale, cy + b[1] / scale, b[2] / scale, b[3] / scale];
+function mapFrom(crop, b) {
+  return [
+    crop.cx + b[0] / crop.scale,
+    crop.cy + b[1] / crop.scale,
+    b[2] / crop.scale,
+    b[3] / crop.scale
+  ];
+}
+
+function iou(a, b) {
+  const x1 = Math.max(a[0], b[0]);
+  const y1 = Math.max(a[1], b[1]);
+  const x2 = Math.min(a[0] + a[2], b[0] + b[2]);
+  const y2 = Math.min(a[1] + a[3], b[1] + b[3]);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  if (inter <= 0) return 0;
+  return inter / (a[2] * a[3] + b[2] * b[3] - inter);
+}
+
+// Non-max suppression: keep the highest-scoring box among overlapping same-class
+// detections so each object is represented once (no duplicate/competing tracks).
+function nms(dets, thr = 0.45) {
+  const out = [];
+  for (const d of [...dets].sort((p, q) => q.score - p.score)) {
+    if (!out.some((o) => o.class === d.class && iou(o.bbox, d.bbox) > thr)) {
+      out.push(d);
+    }
+  }
+  return out;
+}
+
+// Run detection — full frame plus, when far-scan is on (and not user-zoomed), a
+// 2x centre crop — and merge the results in ONE frame so distant ships are found
+// without creating a second flickering track for the same object.
+async function detectMerged() {
+  const W = video.videoWidth;
+  if (!W) return [];
+  const opts = { minScore: settings.confidence, maxObjects: 30 };
+  let dets;
+  if (zoom > 1.001) {
+    const c = cropSource(zoom);
+    dets = (await detect(detCanvas, opts)).map((d) => ({
+      ...d,
+      bbox: mapFrom(c, d.bbox)
+    }));
+  } else {
+    dets = await detect(video, opts);
+    if (settings.farScan) {
+      const c = cropSource(2);
+      const cd = (await detect(detCanvas, opts)).map((d) => ({
+        ...d,
+        bbox: mapFrom(c, d.bbox)
+      }));
+      dets = dets.concat(cd);
+    }
+  }
+  return nms(dets.filter((d) => sceneAllows(d.class, settings.scene)));
 }
 
 // Convert a screen point to video-intrinsic coordinates, inverting the
@@ -210,16 +246,7 @@ async function loop() {
   try {
     sizeCanvas(canvas, video);
 
-    // Detect on the (digitally) zoomed crop, then map boxes back to video space.
-    const source = detectionSource();
-    const raw = await detect(source, {
-      minScore: settings.confidence,
-      maxObjects: 30
-    });
-    const detections = raw
-      .filter((d) => sceneAllows(d.class, settings.scene))
-      .map((d) => ({ ...d, bbox: mapBox(d.bbox) }));
-
+    const detections = await detectMerged();
     const active = tracker.update(detections);
     lastActive = active; // for tap-to-dismiss hit testing
 
@@ -242,7 +269,7 @@ async function loop() {
     }
     lastIdents = idents;
 
-    draw(ctx, active, idents);
+    draw(ctx, active, idents, zoom);
     handleCounts(active, idents);
 
     renderCounters(tracker.liveCounts(), tracker.totals, {
@@ -289,8 +316,17 @@ function captureSnapshot() {
   out.width = targetW;
   out.height = Math.round(targetW * ratio);
   const octx = out.getContext('2d');
-  octx.drawImage(video, 0, 0, out.width, out.height);
-  octx.drawImage(canvas, 0, 0, out.width, out.height); // include the reticles
+  if (zoom > 1.001) {
+    // Replicate the zoomed view: draw the centre crop the user actually sees.
+    const W = video.videoWidth;
+    const H = video.videoHeight;
+    const cw = W / zoom;
+    const ch = H / zoom;
+    octx.drawImage(video, (W - cw) / 2, (H - ch) / 2, cw, ch, 0, 0, out.width, out.height);
+  } else {
+    octx.drawImage(video, 0, 0, out.width, out.height);
+  }
+  octx.drawImage(canvas, 0, 0, out.width, out.height); // reticles already in zoomed positions
   let img;
   try {
     img = out.toDataURL('image/jpeg', 0.55);

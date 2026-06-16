@@ -21,13 +21,24 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-export function draw(ctx, tracks, idents) {
+export function draw(ctx, tracks, idents, zoom = 1) {
   const { canvas } = ctx;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const scale = canvas.width / 640;
+  const W = canvas.width;
+  const H = canvas.height;
+  const scale = W / 640;
   const fontPx = Math.max(13, 15 * scale);
   ctx.font = `600 ${fontPx}px -apple-system, system-ui, sans-serif`;
   ctx.textBaseline = 'top';
+
+  // Map a video-space box into on-screen canvas space for the current zoom
+  // (scale about centre). Text size is deliberately left untouched by zoom.
+  const place = (b) => [
+    W / 2 + (b.x - W / 2) * zoom,
+    H / 2 + (b.y - H / 2) * zoom,
+    b.w * zoom,
+    b.h * zoom
+  ];
 
   const live = new Set();
 
@@ -36,24 +47,26 @@ export function draw(ctx, tracks, idents) {
     const meta = t.subtype || describe(t.class);
     const ident = idents.get(t.id);
 
-    // Smooth the drawn box toward the tracker's target box.
+    // Smooth the drawn box toward the tracker's target box (gentle = calm).
     let r = render.get(t.id);
     if (!r) {
       r = { x: t.bbox[0], y: t.bbox[1], w: t.bbox[2], h: t.bbox[3] };
       render.set(t.id, r);
     } else {
-      const k = 0.4;
+      const k = 0.22;
       r.x = lerp(r.x, t.bbox[0], k);
       r.y = lerp(r.y, t.bbox[1], k);
       r.w = lerp(r.w, t.bbox[2], k);
       r.h = lerp(r.h, t.bbox[3], k);
     }
 
-    const score = t.score || 0;
-    const alpha = Math.max(0.5, Math.min(1, score + 0.25));
-    drawReticle(ctx, r, meta.color, scale, alpha);
+    const [dx, dy, dw, dh] = place(r);
+    const d = { x: dx, y: dy, w: dw, h: dh };
 
-    // Labels
+    const score = t.score || 0;
+    const alpha = Math.max(0.55, Math.min(1, score + 0.25));
+    drawReticle(ctx, d, meta.color, scale, alpha);
+
     const pct = Math.round(score * 100);
     const line1 = `${meta.emoji} ${meta.label} · ${pct}%`;
     let line2 = null;
@@ -70,7 +83,7 @@ export function draw(ctx, tracks, idents) {
         line2 = `🛰 ${bits.join(' · ')}`;
       }
     }
-    drawLabel(ctx, r.x, r.y, [line1, line2].filter(Boolean), meta.color, scale, fontPx);
+    drawLabel(ctx, d.x, d.y, [line1, line2].filter(Boolean), meta.color, scale, fontPx);
   }
 
   // Drop render state for retired tracks.

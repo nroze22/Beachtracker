@@ -48,14 +48,10 @@ export class Tracker {
    * @returns {Array<Track>} active confirmed tracks (for drawing)
    */
   update(detections) {
-    // Predict: nudge each track's box by its last velocity, but only for a few
-    // frames after the last real detection — then freeze it in place so a box
-    // that's coasting (object still in view, detector just blinked) stays put
-    // instead of drifting off the target.
+    // No velocity prediction: a coasting box stays exactly where it was last
+    // seen. Predicting motion made distant/near-static objects jump around;
+    // holding still reads as calm and is more accurate for slow scenes.
     for (const t of this.tracks.values()) {
-      if (t.timeSinceUpdate < 5) {
-        t.bbox = [t.bbox[0] + t.vx, t.bbox[1] + t.vy, t.bbox[2], t.bbox[3]];
-      }
       t.timeSinceUpdate += 1;
       t.age += 1;
     }
@@ -85,13 +81,16 @@ export class Tracker {
       }
     }
 
-    // Apply matches (update box, velocity, hit streak).
+    // Apply matches: ease the stored box toward the new detection (EMA) so the
+    // track target itself is smooth, not just the rendered box.
     for (const [t, det] of pairs) {
-      const [cx0, cy0] = center(t.bbox);
-      t.bbox = det.bbox;
-      const [cx1, cy1] = center(det.bbox);
-      t.vx = cx1 - cx0;
-      t.vy = cy1 - cy0;
+      const a = 0.5;
+      t.bbox = [
+        t.bbox[0] + (det.bbox[0] - t.bbox[0]) * a,
+        t.bbox[1] + (det.bbox[1] - t.bbox[1]) * a,
+        t.bbox[2] + (det.bbox[2] - t.bbox[2]) * a,
+        t.bbox[3] + (det.bbox[3] - t.bbox[3]) * a
+      ];
       t.score = det.score;
       t.hits += 1;
       t.timeSinceUpdate = 0;
