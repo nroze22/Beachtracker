@@ -2,7 +2,10 @@ name: Deploy BeachTracker to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # Deploy from the repository's default branch. The GitHub Pages
+    # environment only permits deployments from the default branch, so the
+    # trigger and the default branch must match.
+    branches: [claude/vashon-wildlife-detection-hnqutc]
   workflow_dispatch:
 
 permissions:
