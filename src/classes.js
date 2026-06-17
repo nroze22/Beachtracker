@@ -1,37 +1,164 @@
-// Maps raw model class names to the friendly, beach-themed labels we show,
-// plus which detector targets we actually care about counting.
-//
-// COCO-SSD (the default offline model) knows 80 classes. The shoreline-relevant
-// ones are bird / boat / airplane plus a few beach regulars (kite, surfboard,
-// umbrella, person, dog). Seals and otters are NOT in COCO — there is no free
-// in-browser model for them — so those are logged by hand (the 🦭 / 🦦 buttons)
-// or via a custom model you plug in.
-//
-// A bare "boat" gets refined into a fishing boat / ferry / cargo ship / sailboat
-// etc. once AIS identifies it (see VESSEL_TYPES below).
+// Friendly labels, emojis and colours for everything the detector can see.
+// YOLOv8 / COCO-SSD know all 80 COCO classes; we surface them with beach-themed
+// names and group them by category colour. Seals/otters aren't in COCO (logged
+// by hand or via a custom model), but are included so those labels render.
 
-export const CLASS_MAP = {
-  bird: { label: 'Seagull', emoji: '🐦', color: '#ffd166', kind: 'bird' },
-  boat: { label: 'Ship / boat', emoji: '🚢', color: '#4cc9f0', kind: 'boat' },
-  airplane: { label: 'Plane', emoji: '✈️', color: '#f72585', kind: 'airplane' },
-  // Beach regulars COCO can spot out of the box:
-  kite: { label: 'Kite', emoji: '🪁', color: '#ff9f1c', kind: 'kite' },
-  surfboard: { label: 'Surfboard', emoji: '🏄', color: '#2ec4b6', kind: 'surfboard' },
-  umbrella: { label: 'Beach umbrella', emoji: '⛱️', color: '#e71d36', kind: 'umbrella' },
-  person: { label: 'Person', emoji: '🧍', color: '#b5179e', kind: 'person' },
-  dog: { label: 'Dog', emoji: '🐕', color: '#90be6d', kind: 'dog' },
-  // Hooks for a custom marine-mammal model (class names you'd export it with):
-  seal: { label: 'Seal', emoji: '🦭', color: '#43aa8b', kind: 'seal' },
-  'sea lion': { label: 'Sea lion', emoji: '🦭', color: '#43aa8b', kind: 'seal' },
-  otter: { label: 'Otter', emoji: '🦦', color: '#577590', kind: 'otter' }
+// category colour, then [label, emoji] per raw COCO class.
+const CATEGORIES = {
+  wildlife: {
+    color: '#43aa8b',
+    items: {
+      bird: ['Seagull', '🐦'],
+      cat: ['Cat', '🐈'],
+      dog: ['Dog', '🐕'],
+      horse: ['Horse', '🐎'],
+      sheep: ['Sheep', '🐑'],
+      cow: ['Cow', '🐄'],
+      elephant: ['Elephant', '🐘'],
+      bear: ['Bear', '🐻'],
+      zebra: ['Zebra', '🦓'],
+      giraffe: ['Giraffe', '🦒']
+    }
+  },
+  marine: {
+    color: '#2ec4b6',
+    items: {
+      seal: ['Seal', '🦭'],
+      'sea lion': ['Sea lion', '🦭'],
+      otter: ['Otter', '🦦']
+    }
+  },
+  air: {
+    color: '#f72585',
+    items: { airplane: ['Plane', '✈️'], kite: ['Kite', '🪁'] }
+  },
+  vehicles: {
+    color: '#4cc9f0',
+    items: {
+      boat: ['Ship / boat', '🚢'],
+      bicycle: ['Bicycle', '🚲'],
+      car: ['Car', '🚗'],
+      motorcycle: ['Motorcycle', '🏍️'],
+      bus: ['Bus', '🚌'],
+      train: ['Train', '🚆'],
+      truck: ['Truck', '🚚']
+    }
+  },
+  street: {
+    color: '#ffd166',
+    items: {
+      'traffic light': ['Traffic light', '🚦'],
+      'fire hydrant': ['Fire hydrant', '🧯'],
+      'stop sign': ['Stop sign', '🛑'],
+      'parking meter': ['Parking meter', '🅿️'],
+      bench: ['Bench', '🪑']
+    }
+  },
+  people: { color: '#b5179e', items: { person: ['Person', '🧍'] } },
+  sport: {
+    color: '#06d6a0',
+    items: {
+      frisbee: ['Frisbee', '🥏'],
+      skis: ['Skis', '🎿'],
+      snowboard: ['Snowboard', '🏂'],
+      'sports ball': ['Ball', '⚽'],
+      'baseball bat': ['Bat', '🏏'],
+      'baseball glove': ['Glove', '🧤'],
+      skateboard: ['Skateboard', '🛹'],
+      surfboard: ['Surfboard', '🏄'],
+      'tennis racket': ['Racket', '🎾']
+    }
+  },
+  gear: {
+    color: '#bdb2ff',
+    items: {
+      backpack: ['Backpack', '🎒'],
+      umbrella: ['Umbrella', '⛱️'],
+      handbag: ['Handbag', '👜'],
+      tie: ['Tie', '👔'],
+      suitcase: ['Suitcase', '🧳']
+    }
+  },
+  food: {
+    color: '#ff9f1c',
+    items: {
+      bottle: ['Bottle', '🍾'],
+      'wine glass': ['Wine glass', '🍷'],
+      cup: ['Cup', '☕'],
+      fork: ['Fork', '🍴'],
+      knife: ['Knife', '🔪'],
+      spoon: ['Spoon', '🥄'],
+      bowl: ['Bowl', '🥣'],
+      banana: ['Banana', '🍌'],
+      apple: ['Apple', '🍎'],
+      sandwich: ['Sandwich', '🥪'],
+      orange: ['Orange', '🍊'],
+      broccoli: ['Broccoli', '🥦'],
+      carrot: ['Carrot', '🥕'],
+      'hot dog': ['Hot dog', '🌭'],
+      pizza: ['Pizza', '🍕'],
+      donut: ['Donut', '🍩'],
+      cake: ['Cake', '🍰']
+    }
+  },
+  furniture: {
+    color: '#9b8cff',
+    items: {
+      chair: ['Chair', '🪑'],
+      couch: ['Couch', '🛋️'],
+      'potted plant': ['Plant', '🪴'],
+      bed: ['Bed', '🛏️'],
+      'dining table': ['Table', '🍽️'],
+      toilet: ['Toilet', '🚽']
+    }
+  },
+  tech: {
+    color: '#90a4ae',
+    items: {
+      tv: ['TV', '📺'],
+      laptop: ['Laptop', '💻'],
+      mouse: ['Mouse', '🖱️'],
+      remote: ['Remote', '🎛️'],
+      keyboard: ['Keyboard', '⌨️'],
+      'cell phone': ['Phone', '📱'],
+      microwave: ['Microwave', '📦'],
+      oven: ['Oven', '🍳'],
+      toaster: ['Toaster', '🍞'],
+      sink: ['Sink', '🚰'],
+      refrigerator: ['Fridge', '🧊']
+    }
+  },
+  misc: {
+    color: '#cbd5e1',
+    items: {
+      book: ['Book', '📚'],
+      clock: ['Clock', '🕐'],
+      vase: ['Vase', '🏺'],
+      scissors: ['Scissors', '✂️'],
+      'teddy bear': ['Teddy bear', '🧸'],
+      'hair drier': ['Hair drier', '💨'],
+      toothbrush: ['Toothbrush', '🪥']
+    }
+  }
 };
 
-// Classes we surface by default. Anything not here is ignored to cut noise.
+// Build the flat CLASS_MAP from the categories.
+export const CLASS_MAP = {};
+for (const { color, items } of Object.values(CATEGORIES)) {
+  for (const [cls, [label, emoji]] of Object.entries(items)) {
+    CLASS_MAP[cls] = {
+      label,
+      emoji,
+      color,
+      kind: cls === 'sea lion' ? 'seal' : cls
+    };
+  }
+}
+
+// Everything is tracked; Scene filters below trim it down per situation.
 export const TRACKED_CLASSES = new Set(Object.keys(CLASS_MAP));
 
 // --- Vessel subtypes, derived from AIS ship-type codes ------------------
-// A detected "boat" is generic. Once AIS tells us the ship type we promote it
-// to a specific vessel kind with its own emoji, label and counter.
 export const VESSEL_TYPES = {
   fishing: { label: 'Fishing boat', emoji: '🎣', color: '#06d6a0', kind: 'vessel_fishing' },
   sailing: { label: 'Sailboat', emoji: '⛵', color: '#a0c4ff', kind: 'vessel_sailing' },
@@ -45,7 +172,6 @@ export const VESSEL_TYPES = {
   other: { label: 'Vessel', emoji: '🚢', color: '#4cc9f0', kind: 'boat' }
 };
 
-// Map a raw AIS ship-type code (0-99) to one of the buckets above.
 export function vesselBucketFromAisType(code) {
   if (code == null) return null;
   if (code === 30) return 'fishing';
@@ -60,7 +186,6 @@ export function vesselBucketFromAisType(code) {
   return 'other';
 }
 
-// Resolve the subtype descriptor for an AIS-matched vessel, or null if unknown.
 export function vesselSubtype(aisVessel) {
   if (!aisVessel) return null;
   const bucket = vesselBucketFromAisType(aisVessel.typeCode);
@@ -86,24 +211,32 @@ export const MANUAL_TAGS = {
   otter: { label: 'Otter', emoji: '🦦', kind: 'otter' }
 };
 
-// Scene presets filter which raw COCO classes are kept, to cut irrelevant
-// false positives (e.g. furniture mislabelled while you point inland).
+// Scene presets filter which raw classes are kept, to cut irrelevant noise.
 export const SCENES = {
   all: { label: 'All', emoji: '🌎', classes: null },
   water: {
     label: 'Water',
     emoji: '🌊',
-    classes: ['boat', 'bird', 'seal', 'sea lion', 'otter']
+    classes: ['boat', 'bird', 'seal', 'sea lion', 'otter', 'surfboard', 'person']
   },
   sky: { label: 'Sky', emoji: '🛩️', classes: ['airplane', 'bird', 'kite'] },
   beach: {
     label: 'Beach',
     emoji: '🏖️',
-    classes: ['person', 'dog', 'surfboard', 'umbrella', 'kite', 'bird']
+    classes: ['person', 'dog', 'surfboard', 'umbrella', 'kite', 'bird', 'frisbee', 'sports ball', 'bicycle']
+  },
+  animals: {
+    label: 'Animals',
+    emoji: '🐾',
+    classes: ['bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'seal', 'sea lion', 'otter']
+  },
+  street: {
+    label: 'Street',
+    emoji: '🚗',
+    classes: ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'train', 'traffic light', 'dog']
   }
 };
 
-// True if a raw detection class is allowed by the given scene.
 export function sceneAllows(rawClass, scene) {
   const s = SCENES[scene] || SCENES.all;
   return !s.classes || s.classes.includes(rawClass);

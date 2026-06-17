@@ -24,7 +24,7 @@ Open it in Safari, tap *Add to Home Screen*, and it runs like a native app.
 | 🦭 **Seals & otters** | Not in COCO's 80 classes (and no free in-browser model exists), so there are one-tap **🦭 / 🦦 log buttons**. A custom-model slot lets you drop in your own TF.js detector later. |
 | 📋 **Sighting log** | Every confirmed detection + manual tag is logged with time and GPS, exportable to **CSV**. |
 | 🛰 **Radar minimap** | Heads-up radar plots nearby AIS ships & ADS-B planes by real bearing/distance, rotated to where you're pointing, with the matched target highlighted. |
-| 🎛️ **Scene modes** | Water / Sky / Beach / All filters to cut irrelevant false positives. |
+| 🎛️ **Scene modes** | Water / Sky / Beach / Animals / Street / All filters to cut irrelevant detections. |
 | 🔭 **Far-scan** | Alternates a 2× centre-crop detection pass each frame so distant ships are found without manual zoom. |
 | 🎯 **Smart overlay** | Smooth, interpolated corner-bracket reticles styled by confidence; tap a box to dismiss a false positive. |
 | 📸 **Snapshots** | Capture the live view (with reticles) into the log as tap-to-view thumbnails. |

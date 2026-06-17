@@ -50,7 +50,7 @@ export function draw(ctx, tracks, idents, zoom = 1) {
     // Smooth the drawn box toward the tracker's target box (gentle = calm).
     let r = render.get(t.id);
     if (!r) {
-      r = { x: t.bbox[0], y: t.bbox[1], w: t.bbox[2], h: t.bbox[3] };
+      r = { x: t.bbox[0], y: t.bbox[1], w: t.bbox[2], h: t.bbox[3], born: performance.now() };
       render.set(t.id, r);
     } else {
       const k = 0.22;
@@ -66,6 +66,10 @@ export function draw(ctx, tracks, idents, zoom = 1) {
     const score = t.score || 0;
     const alpha = Math.max(0.55, Math.min(1, score + 0.25));
     drawReticle(ctx, d, meta.color, scale, alpha);
+
+    // Lock-on pulse: an expanding ring for the first ~0.6s after acquisition.
+    const age = performance.now() - r.born;
+    if (age < 600) drawPulse(ctx, d, meta.color, age / 600, scale);
 
     const pct = Math.round(score * 100);
     const line1 = `${meta.emoji} ${meta.label} · ${pct}%`;
@@ -88,6 +92,22 @@ export function draw(ctx, tracks, idents, zoom = 1) {
 
   // Drop render state for retired tracks.
   for (const id of [...render.keys()]) if (!live.has(id)) render.delete(id);
+}
+
+function drawPulse(ctx, d, color, t, scale) {
+  // t: 0..1 progress. Ring expands out from the box and fades.
+  const cx = d.x + d.w / 2;
+  const cy = d.y + d.h / 2;
+  const base = Math.max(d.w, d.h) / 2;
+  const radius = base * (1 + t * 0.8);
+  ctx.save();
+  ctx.globalAlpha = (1 - t) * 0.8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, 3 * scale) * (1 - t);
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawReticle(ctx, r, color, scale, alpha) {
